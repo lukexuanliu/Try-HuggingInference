@@ -1,0 +1,151 @@
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  // Elements
+  const generateForm = document.getElementById('generateForm');
+  const modelSelect = document.getElementById('modelSelect');
+  const modelDescription = document.getElementById('modelDescription');
+  const debugToggle = document.getElementById('debugToggle');
+  const debugCard = document.getElementById('debugCard');
+  const paramsToggle = document.getElementById('paramsToggle');
+  const paramsSection = document.getElementById('paramsSection');
+  const resultContainer = document.getElementById('resultContainer');
+  const temperatureInput = document.getElementById('temperature');
+  const temperatureValue = document.getElementById('temperatureValue');
+  const topPInput = document.getElementById('topP');
+  const topPValue = document.getElementById('topPValue');
+  const generateBtn = document.getElementById('generateBtn');
+
+  // Model descriptions
+  const modelDescriptions = <%- JSON.stringify(models) %>;
+
+  // Show/hide debug info
+  debugToggle.addEventListener('change', function() {
+    debugCard.style.display = this.checked ? 'block' : 'none';
+  });
+
+  // Show/hide parameters
+  paramsToggle.addEventListener('click', function() {
+    paramsSection.style.display = paramsSection.style.display === 'none' ? 'block' : 'none';
+  });
+
+  // Update model description
+  modelSelect.addEventListener('change', function() {
+    const selectedModel = this.value;
+    if (modelDescriptions[selectedModel]) {
+      modelDescription.textContent = modelDescriptions[selectedModel].description;
+    }
+  });
+
+  // Update temperature value display
+  temperatureInput.addEventListener('input', function() {
+    temperatureValue.textContent = this.value;
+  });
+
+  // Update top-p value display
+  topPInput.addEventListener('input', function() {
+    topPValue.textContent = this.value;
+  });
+
+  // Form submission
+  generateForm.addEventListener('submit', async function(e) {
+    e.preventDefault();
+    
+    // Show loading state
+    generateBtn.disabled = true;
+    generateBtn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Generating...';
+    
+    resultContainer.innerHTML = `
+      <div class="p-4 border rounded bg-secondary-subtle">
+        <div class="d-flex align-items-center mb-3">
+          <span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+          <span>Generating text...</span>
+        </div>
+        <div class="loader"></div>
+      </div>
+    `;
+    
+    // Get form data
+    const formData = new FormData(this);
+    const model = formData.get('model');
+    const prompt = formData.get('prompt');
+    
+    // Get parameters
+    const params = {
+      max_new_tokens: parseInt(formData.get('max_new_tokens') || '100'),
+      temperature: parseFloat(formData.get('temperature') || '0.7'),
+      top_k: parseInt(formData.get('top_k') || '50'),
+      top_p: parseFloat(formData.get('top_p') || '0.95')
+    };
+
+    try {
+      // Send request to the server
+      const response = await fetch('/generate', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ model, prompt, params }),
+      });
+      
+      // Parse the response
+      const data = await response.json();
+      
+      // Update debug information
+      if (data.debugInfo) {
+        document.getElementById('requestDebug').textContent = 
+          JSON.stringify({
+            url: data.debugInfo.requestUrl,
+            payload: data.debugInfo.requestPayload
+          }, null, 2);
+        
+        document.getElementById('responseDebug').textContent = 
+          JSON.stringify(data.debugInfo.rawResponse, null, 2);
+        
+        document.getElementById('performanceDebug').textContent = 
+          JSON.stringify({
+            requestTime: `${data.debugInfo.requestTime} seconds`,
+            httpStatus: data.debugInfo.httpStatus
+          }, null, 2);
+      }
+      
+      // Update result container
+      if (data.success && data.result) {
+        resultContainer.innerHTML = `
+          <div class="mb-3">
+            <label class="form-label fw-bold">Prompt:</label>
+            <div class="p-3 border rounded bg-secondary-subtle">
+              <div class="result-content">${prompt}</div>
+            </div>
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-bold">Generated Text:</label>
+            <div class="p-3 border rounded bg-secondary-subtle">
+              <div class="result-content">${data.result}</div>
+            </div>
+          </div>
+        `;
+      } else {
+        // Show error
+        resultContainer.innerHTML = `
+          <div class="alert alert-danger" role="alert">
+            <h4 class="alert-heading">Error!</h4>
+            <p>${data.error || 'Unknown error occurred'}</p>
+          </div>
+        `;
+      }
+    } catch (error) {
+      // Show error
+      resultContainer.innerHTML = `
+        <div class="alert alert-danger" role="alert">
+          <h4 class="alert-heading">Error!</h4>
+          <p>${error.message || 'Unknown error occurred'}</p>
+        </div>
+      `;
+    } finally {
+      // Reset button state
+      generateBtn.disabled = false;
+      generateBtn.textContent = 'Generate Text';
+    }
+  });
+});
+</script>

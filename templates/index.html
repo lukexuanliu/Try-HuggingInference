@@ -1,0 +1,339 @@
+{% extends "layout.html" %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="card mb-4">
+            <div class="card-header">
+                <h4><i class="fas fa-comment-dots me-2"></i>Generate Text with Hugging Face Models</h4>
+                <p class="text-muted mb-0">
+                    This demo shows how to interact with Hugging Face's publicly hosted language models.
+                    All API calls and responses are logged for debugging purposes.
+                </p>
+            </div>
+            <div class="card-body">
+                <form id="generateForm">
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label for="modelSelect" class="form-label">Model</label>
+                            <select class="form-select" id="modelSelect" name="model">
+                                {% for model_id, model in models.items() %}
+                                <option value="{{ model_id }}" {% if model_id == default_model %}selected{% endif %}>
+                                    {{ model.display_name }}
+                                </option>
+                                {% endfor %}
+                            </select>
+                            <div id="modelDescription" class="model-description mt-2">
+                                {% if default_model in models %}
+                                {{ models[default_model].description }}
+                                {% endif %}
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="accordion" id="parametersAccordion">
+                                <div class="accordion-item">
+                                    <h2 class="accordion-header">
+                                        <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseParameters">
+                                            <i class="fas fa-sliders-h me-2"></i> Advanced Parameters
+                                        </button>
+                                    </h2>
+                                    <div id="collapseParameters" class="accordion-collapse collapse" data-bs-parent="#parametersAccordion">
+                                        <div class="accordion-body">
+                                            <div class="mb-3">
+                                                <label for="maxNewTokens" class="form-label">Max New Tokens</label>
+                                                <input type="number" class="form-control" id="maxNewTokens" name="max_new_tokens" value="{{ max_new_tokens }}">
+                                                <div class="form-text">Maximum number of tokens to generate.</div>
+                                            </div>
+                                            <div class="mb-3">
+                                                <label for="temperature" class="form-label">Temperature</label>
+                                                <input type="range" class="form-range" id="temperature" name="temperature" min="0.1" max="2.0" step="0.1" value="{{ temperature }}">
+                                                <div class="d-flex justify-content-between">
+                                                    <small>0.1 (More deterministic)</small>
+                                                    <small id="temperatureValue">{{ temperature }}</small>
+                                                    <small>2.0 (More random)</small>
+                                                </div>
+                                            </div>
+                                            <div class="row">
+                                                <div class="col-md-6">
+                                                    <div class="mb-3">
+                                                        <label for="topK" class="form-label">Top K</label>
+                                                        <input type="number" class="form-control" id="topK" name="top_k" value="{{ top_k }}">
+                                                        <div class="form-text">Number of highest probability tokens to consider.</div>
+                                                    </div>
+                                                </div>
+                                                <div class="col-md-6">
+                                                    <div class="mb-3">
+                                                        <label for="topP" class="form-label">Top P</label>
+                                                        <input type="number" class="form-control" id="topP" name="top_p" min="0" max="1" step="0.01" value="{{ top_p }}">
+                                                        <div class="form-text">Cumulative probability cutoff for token selection.</div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="promptInput" class="form-label">Prompt</label>
+                        <textarea class="form-control" id="promptInput" name="prompt" rows="4" placeholder="Enter your prompt here..."></textarea>
+                    </div>
+
+                    <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                        <button type="button" class="btn btn-secondary" id="clearButton">
+                            <i class="fas fa-eraser me-1"></i> Clear
+                        </button>
+                        <button type="submit" class="btn btn-primary" id="generateButton">
+                            <i class="fas fa-bolt me-1"></i> Generate
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Results Section -->
+        <div id="resultsSection" class="card mb-4 d-none">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0"><i class="fas fa-file-alt me-2"></i>Generation Results</h5>
+                <span id="statusBadge" class="badge bg-secondary status-badge">Idle</span>
+            </div>
+            <div class="card-body">
+                <div id="generationError" class="alert alert-danger d-none"></div>
+                
+                <div id="generationContent" class="d-none">
+                    <h6>Generated Text:</h6>
+                    <div id="generatedText" class="generated-text"></div>
+                    <div class="text-end mt-2">
+                        <span id="timingInfo" class="timing-info"></span>
+                    </div>
+                </div>
+
+                <!-- Debug Information -->
+                <div class="debug-section">
+                    <ul class="nav nav-tabs" id="debugTabs" role="tablist">
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link active" id="request-tab" data-bs-toggle="tab" data-bs-target="#request" type="button" role="tab">
+                                <i class="fas fa-paper-plane me-1"></i> Request
+                            </button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link" id="response-tab" data-bs-toggle="tab" data-bs-target="#response" type="button" role="tab">
+                                <i class="fas fa-reply me-1"></i> Response
+                            </button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link" id="full-debug-tab" data-bs-toggle="tab" data-bs-target="#full-debug" type="button" role="tab">
+                                <i class="fas fa-bug me-1"></i> Full Debug Info
+                            </button>
+                        </li>
+                    </ul>
+                    <div class="tab-content" id="debugTabsContent">
+                        <div class="tab-pane fade show active" id="request" role="tabpanel">
+                            <h6>API Request:</h6>
+                            <pre class="code-block" id="requestUrl"></pre>
+                            <h6>Request Headers:</h6>
+                            <pre class="code-block" id="requestHeaders"></pre>
+                            <h6>Request Payload:</h6>
+                            <pre class="code-block" id="requestPayload"></pre>
+                        </div>
+                        <div class="tab-pane fade" id="response" role="tabpanel">
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <h6 class="mb-0">API Response:</h6>
+                                <span id="httpStatus" class="badge bg-secondary">Status: N/A</span>
+                            </div>
+                            <pre class="code-block" id="responseBody"></pre>
+                        </div>
+                        <div class="tab-pane fade" id="full-debug" role="tabpanel">
+                            <h6>Complete Debug Information:</h6>
+                            <pre class="code-block" id="fullDebugInfo"></pre>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- No API Key Warning -->
+        <div id="apiKeyWarning" class="alert alert-warning d-none" role="alert">
+            <i class="fas fa-exclamation-triangle me-2"></i>
+            <strong>Warning:</strong> No Hugging Face API token found. The application may not work correctly.
+            Make sure to set the <code>HUGGINGFACE_API_TOKEN</code> environment variable.
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    $(document).ready(function() {
+        // Check if API token is set
+        $.get('/health', function(data) {
+            if (!window.location.href.includes('{{ HUGGINGFACE_API_TOKEN }}') && 
+                '{{ HUGGINGFACE_API_TOKEN }}' === '') {
+                $('#apiKeyWarning').removeClass('d-none');
+            }
+        });
+
+        // Update model description when selection changes
+        const modelDescriptions = {
+            {% for model_id, model in models.items() %}
+            "{{ model_id }}": "{{ model.description }}",
+            {% endfor %}
+        };
+
+        $('#modelSelect').on('change', function() {
+            const modelId = $(this).val();
+            $('#modelDescription').text(modelDescriptions[modelId] || '');
+        });
+
+        // Update temperature display value
+        $('#temperature').on('input', function() {
+            $('#temperatureValue').text($(this).val());
+        });
+
+        // Handle form submission
+        $('#generateForm').on('submit', function(e) {
+            e.preventDefault();
+            generateText();
+        });
+
+        // Clear button handler
+        $('#clearButton').on('click', function() {
+            $('#promptInput').val('');
+            $('#resultsSection').addClass('d-none');
+            $('#generatedText').empty();
+            $('#generationError').addClass('d-none');
+            $('#generationContent').addClass('d-none');
+        });
+
+        // Text generation function
+        function generateText() {
+            // Show results section and set status to loading
+            $('#resultsSection').removeClass('d-none');
+            $('#statusBadge').removeClass('bg-success bg-danger').addClass('bg-info');
+            $('#statusBadge').html('<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Processing...');
+            
+            // Hide previous errors and content
+            $('#generationError').addClass('d-none');
+            $('#generationContent').addClass('d-none');
+            
+            // Clear previous debug info
+            $('#requestUrl, #requestHeaders, #requestPayload, #responseBody, #fullDebugInfo').text('');
+            $('#httpStatus').text('Status: N/A').removeClass('bg-success bg-danger').addClass('bg-secondary');
+            
+            // Get form data
+            const model = $('#modelSelect').val();
+            const prompt = $('#promptInput').val();
+            
+            // Get advanced parameters
+            const maxNewTokens = parseInt($('#maxNewTokens').val());
+            const temperature = parseFloat($('#temperature').val());
+            const topK = parseInt($('#topK').val());
+            const topP = parseFloat($('#topP').val());
+            
+            // Create params object with all settings
+            const params = {
+                max_new_tokens: maxNewTokens,
+                temperature: temperature,
+                top_k: topK,
+                top_p: topP
+            };
+            
+            // Create request payload
+            const payload = {
+                model: model,
+                prompt: prompt,
+                params: params
+            };
+            
+            // Make AJAX request
+            $.ajax({
+                url: '/generate',
+                type: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify(payload),
+                success: function(response) {
+                    // Update the status badge
+                    if (response.success) {
+                        $('#statusBadge').removeClass('bg-info').addClass('bg-success');
+                        $('#statusBadge').text('Success');
+                    } else {
+                        $('#statusBadge').removeClass('bg-info').addClass('bg-danger');
+                        $('#statusBadge').text('Failed');
+                    }
+                    
+                    // Display the result or error
+                    if (response.success) {
+                        $('#generationContent').removeClass('d-none');
+                        $('#generatedText').text(response.result);
+                        
+                        // Show timing info
+                        if (response.debug_info && response.debug_info.request_time) {
+                            $('#timingInfo').text(`Request time: ${response.debug_info.request_time}s`);
+                        }
+                    } else {
+                        $('#generationError').removeClass('d-none');
+                        $('#generationError').text(`Error: ${response.error}`);
+                    }
+                    
+                    // Update debug information
+                    updateDebugInfo(response);
+                },
+                error: function(xhr, status, error) {
+                    // Handle AJAX errors
+                    $('#statusBadge').removeClass('bg-info').addClass('bg-danger');
+                    $('#statusBadge').text('Error');
+                    
+                    $('#generationError').removeClass('d-none');
+                    $('#generationError').text(`Network error: ${error}`);
+                    
+                    console.error('Error:', error);
+                }
+            });
+        }
+        
+        // Function to update the debug information
+        function updateDebugInfo(response) {
+            if (!response.debug_info) return;
+            
+            // Request information
+            if (response.debug_info.request_url) {
+                $('#requestUrl').text(response.debug_info.request_url);
+            }
+            
+            if (response.debug_info.request_headers) {
+                $('#requestHeaders').text(JSON.stringify(response.debug_info.request_headers, null, 2));
+            }
+            
+            if (response.debug_info.request_payload) {
+                $('#requestPayload').text(JSON.stringify(response.debug_info.request_payload, null, 2));
+            }
+            
+            // Response information
+            if (response.debug_info.raw_response) {
+                $('#responseBody').text(JSON.stringify(response.debug_info.raw_response, null, 2));
+            }
+            
+            // HTTP Status
+            if (response.debug_info.http_status) {
+                const statusCode = response.debug_info.http_status;
+                let statusClass = 'bg-secondary';
+                
+                if (statusCode >= 200 && statusCode < 300) {
+                    statusClass = 'bg-success';
+                } else if (statusCode >= 400) {
+                    statusClass = 'bg-danger';
+                } else if (statusCode >= 300) {
+                    statusClass = 'bg-warning';
+                }
+                
+                $('#httpStatus').text(`Status: ${statusCode}`).removeClass('bg-secondary bg-success bg-danger bg-warning').addClass(statusClass);
+            }
+            
+            // Full debug info
+            $('#fullDebugInfo').text(JSON.stringify(response.debug_info, null, 2));
+        }
+    });
+</script>
+{% endblock %}

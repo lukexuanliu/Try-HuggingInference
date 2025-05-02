@@ -1,0 +1,117 @@
+<div class="row">
+    <div class="col-md-6">
+        <div class="card mb-4">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h2 class="h5 mb-0">Text Generation</h2>
+                <div class="form-check form-switch">
+                    <input class="form-check-input" type="checkbox" id="debugToggle">
+                    <label class="form-check-label" for="debugToggle">Debug Mode</label>
+                </div>
+            </div>
+            <div class="card-body">
+                <form id="generateForm">
+                    <div class="mb-3">
+                        <label for="modelSelect" class="form-label">Model</label>
+                        <select class="form-select" id="modelSelect" name="model">
+                            <% Object.keys(models).forEach(function(key) { %>
+                                <option value="<%= key %>" <%= key === defaultModel ? 'selected' : '' %>>
+                                    <%= models[key].displayName %>
+                                </option>
+                            <% }); %>
+                        </select>
+                        <div class="form-text" id="modelDescription">
+                            <%= models[defaultModel].description %>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="promptInput" class="form-label">Prompt</label>
+                        <textarea class="form-control" id="promptInput" name="prompt" rows="3" required></textarea>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label d-flex justify-content-between align-items-center">
+                            <span>Parameters</span>
+                            <button type="button" class="btn btn-sm btn-outline-secondary" id="paramsToggle">
+                                Show/Hide
+                            </button>
+                        </label>
+                        <div id="paramsSection" class="border rounded p-3" style="display: none;">
+                            <div class="mb-2">
+                                <label for="maxTokens" class="form-label">Max New Tokens</label>
+                                <input type="number" class="form-control" id="maxTokens" name="max_new_tokens" 
+                                       value="<%= defaultParams.max_new_tokens %>" min="1" max="500">
+                            </div>
+                            <div class="mb-2">
+                                <label for="temperature" class="form-label">Temperature</label>
+                                <input type="range" class="form-range" id="temperature" name="temperature" 
+                                       min="0" max="1" step="0.1" value="<%= defaultParams.temperature %>">
+                                <div class="d-flex justify-content-between">
+                                    <span class="small">0 (Deterministic)</span>
+                                    <span class="small" id="temperatureValue"><%= defaultParams.temperature %></span>
+                                    <span class="small">1 (Creative)</span>
+                                </div>
+                            </div>
+                            <div class="mb-2">
+                                <label for="topK" class="form-label">Top K</label>
+                                <input type="number" class="form-control" id="topK" name="top_k" 
+                                       value="<%= defaultParams.top_k %>" min="1" max="100">
+                            </div>
+                            <div class="mb-2">
+                                <label for="topP" class="form-label">Top P</label>
+                                <input type="range" class="form-range" id="topP" name="top_p" 
+                                       min="0" max="1" step="0.05" value="<%= defaultParams.top_p %>">
+                                <div class="d-flex justify-content-between">
+                                    <span class="small">0</span>
+                                    <span class="small" id="topPValue"><%= defaultParams.top_p %></span>
+                                    <span class="small">1</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="d-grid">
+                        <button type="submit" class="btn btn-primary" id="generateBtn">
+                            Generate Text
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card mb-4">
+            <div class="card-header">
+                <h2 class="h5 mb-0">Results</h2>
+            </div>
+            <div class="card-body">
+                <div id="resultContainer">
+                    <div class="text-center text-body-tertiary py-5">
+                        <p>Generated text will appear here</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="card mb-4" id="debugCard" style="display: none;">
+            <div class="card-header">
+                <h2 class="h5 mb-0">Debug Information</h2>
+            </div>
+            <div class="card-body">
+                <div id="debugContainer">
+                    <div class="mb-3">
+                        <label class="form-label">Request</label>
+                        <pre class="bg-secondary-subtle p-3 rounded"><code id="requestDebug">No request data</code></pre>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Response</label>
+                        <pre class="bg-secondary-subtle p-3 rounded"><code id="responseDebug">No response data</code></pre>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Performance</label>
+                        <pre class="bg-secondary-subtle p-3 rounded"><code id="performanceDebug">No performance data</code></pre>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<%- include('index-scripts') %>
